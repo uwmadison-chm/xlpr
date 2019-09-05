@@ -25,6 +25,7 @@ args = parser.parse_args()
 
 small_font = Font(size = "7")
 
+
 def do_borders(ws, x):
     for col in range(1, x):
         ws.cell(column=col, row=1).border = Border(bottom=Side(border_style="thin", color="000000"))
@@ -32,43 +33,43 @@ def do_borders(ws, x):
 def fill_sheet(ws, num_questions, num_participants, range_high, range_low=1, copyRow2FromSheet1=False):
     # Add headers
     ws['A1'] = 'Sub ID'
-    ws['B1'] = 'Date'
-    ws['C1'] = 'Entered By'
-    ws.column_dimensions["A"].width = "10"
-    ws.column_dimensions["B"].width = "10"
-    ws.column_dimensions["C"].width = "15"
-    for col in range(4, 4 + num_questions):
-        ws.cell(column=col, row=1, value="Q{0}".format(col-3))
+    ws['B1'] = 'Session Date'
+    ws['C1'] = 'Visit'
+    ws['D1'] = 'Date Entered'
+    ws['E1'] = 'Entered By'
+    for col in range(1, 6 + num_questions):
         ws.column_dimensions[get_column_letter(col)].width = "15"
+    for col in range(6, 6 + num_questions):
+        ws.cell(column=col, row=1, value="Q{0}".format(col-5))
         question_metadata = ws.cell(column=col,row=2)
         question_metadata.font = small_font
         if copyRow2FromSheet1:
-            question_metadata.value = '=Entry1!{0}'.format(question_metadata.coordinate)
+            question_metadata.value = '=Entry1!{0}{1}'.format(get_column_letter(col), 2)
 
-    ws.cell(column=4 + num_questions, row=1, value="Notes")
+    ws.cell(column=6 + num_questions, row=1, value="Notes")
 
     # Add subject numbers
     for row in range(3, 3 + num_participants):
         ws.cell(column=1, row=row, value=(row-2+1000))
 
     # Freeze row 1-2, columns 1-3 - basically this freezes everything "above and to the left" of the given cell
-    ws.freeze_panes = "D3"
+    ws.freeze_panes = "F3"
 
-    do_borders(ws, 5 + num_questions)
+    do_borders(ws, 6 + num_questions)
     
-    last_cell = ws.cell(column=3 + num_questions, row=2 + num_participants)
+    last_cell = ws.cell(column=5 + num_questions, row=2 + num_participants)
 
     # Conditional formatting to do blanks as light gray
     blankFill = PatternFill(start_color='EEEEEE', end_color='EEEEEE', fill_type='solid')
     dxf = DifferentialStyle(fill=blankFill)
-    blank = Rule(type="expression", formula = ["ISBLANK(D3)"], dxf=dxf, stopIfTrue=True)
-    ws.conditional_formatting.add('D3:{0}'.format(last_cell.coordinate), blank)
+    blank = Rule(type="expression", formula = ["ISBLANK(F3)"], dxf=dxf, stopIfTrue=True)
+    ws.conditional_formatting.add('F3:{0}'.format(last_cell.coordinate), blank)
                               
     # Conditional formatting to highlight numbers out of range
     if range_high:
         yellowFill = PatternFill(start_color='EEEE66', end_color='EEEE66', fill_type='solid')
         rule = CellIsRule(operator="notBetween", formula=[str(range_low),str(range_high)], fill=yellowFill)
-        ws.conditional_formatting.add('D3:{0}'.format(last_cell.coordinate), rule)
+        ws.conditional_formatting.add('F3:{0}'.format(last_cell.coordinate), rule)
 
     
 
@@ -77,35 +78,46 @@ def compare_sheet(ws, num_questions, num_participants):
     ws.protection.sheet = True
     # Add headers
     ws['A1'] = 'Sub ID'
-    ws['B1'] = 'Rater 1'
-    ws['C1'] = 'Rater 2'
-    for col in range(4, 4 + num_questions):
-        ws.cell(column=col, row=1, value="Q{0}".format(col-3))
+    ws['B1'] = 'Session Date'
+    ws['C1'] = 'Visit'
+    ws['D1'] = 'Rater 1'
+    ws['E1'] = 'Rater 2'
+    for col in range(1, 6 + num_questions):
+        ws.column_dimensions[get_column_letter(col)].width = "15"
+    for col in range(6, 6 + num_questions):
+        ws.cell(column=col, row=1, value="Q{0}".format(col-5))
         question_metadata = ws.cell(column=col,row=2)
-        question_metadata.value = '=Entry1!{0}'.format(question_metadata.coordinate)
+        question_metadata.value = '=Entry1!{0}{1}'.format(get_column_letter(col), 2)
         question_metadata.font = small_font
+
+    def compare_cell(cell):
+        cell.value = "=IF(Entry1!{0}=Entry2!{0},Entry2!{0},CONCATENATE(Entry1!{0},\" vs. \",Entry2!{0}))".format(cell.coordinate)
 
     for row in range(3, 3 + num_participants):
         subject = ws.cell(column=1,row=row)
-        subject.value = "=Entry1!A{0}".format(row)
-        rater1 = ws.cell(column=2,row=row)
-        rater1.value = "=Entry1!C{0}".format(row)
-        rater2 = ws.cell(column=3,row=row)
-        rater2.value = "=Entry2!C{0}".format(row)
-        for col in range(4, 4 + num_questions):
+        compare_cell(subject)
+        session_date = ws.cell(column=2,row=row)
+        compare_cell(session_date)
+        visit = ws.cell(column=3,row=row)
+        compare_cell(visit)
+        rater1 = ws.cell(column=4,row=row)
+        rater1.value = "=Entry1!E{0}".format(row)
+        rater2 = ws.cell(column=5,row=row)
+        rater2.value = "=Entry2!E{0}".format(row)
+        for col in range(4, 6 + num_questions):
             cell = ws.cell(column=col,row=row)
-            cell.value = "=IF(Entry1!{0}=Entry2!{0},Entry2!{0},CONCATENATE(Entry1!{0},\" vs. \",Entry2!{0}))".format(cell.coordinate)
+            compare_cell(cell)
 
     last_cell = ws.cell(column=3 + num_questions, row=2 + num_participants)
 
-    for col in range(4, 4 + num_questions):
+    for col in range(4, 6 + num_questions):
         ws.column_dimensions[get_column_letter(col)].width = "15"
 
     # Conditional formatting to highlight mismatches
     redFill = PatternFill(start_color='EE6666', end_color='EE6666', fill_type='solid')
     dxf = DifferentialStyle(fill=redFill)
-    rule = Rule(type="containsText", operator="containsText", text="vs.", dxf=dxf)
-    ws.conditional_formatting.add('D3:{0}'.format(last_cell.coordinate), rule)
+    rule = Rule(type="containsText", operator="containsText", text=" vs. ", dxf=dxf)
+    ws.conditional_formatting.add('A3:{0}'.format(last_cell.coordinate), rule)
 
 
 def compare_sheet_vertical(ws, num_questions, num_participants):
@@ -144,7 +156,11 @@ def generate_automatic():
     for row in range(1,sheet.nrows):
         num_questions = sheet.cell_value(row,1)
         if num_questions == '': continue
-        num_questions = int(num_questions)
+        try:
+            num_questions = int(num_questions)
+        except ValueError:
+            print(f'Ignoring row {row}, "{num_questions}" is not a question number I understand')
+            continue
         if num_questions > 0:
             name = sheet.cell_value(row,0)
             consistent_scale = sheet.cell_value(row,2)
