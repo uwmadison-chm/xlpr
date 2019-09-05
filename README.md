@@ -13,3 +13,11 @@ Excel helper to generate data entry and comparison worksheets.
 ## Examples
 
     python3 xlpr.py PANAS_NOW 20 350
+
+## TODO
+
+- Support for alphabetical ranges (A-D) instead of 1-N, and support 
+  conditional formatting for them still
+- Sheet to help with visual vertical comparison of text dual entry
+- Protect comparison sheets
+- Make question line font small

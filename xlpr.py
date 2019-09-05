@@ -13,15 +13,17 @@ subparsers = parser.add_subparsers(dest='subcommand', title='subcommands', descr
 manual = subparsers.add_parser('manual')
 manual.add_argument('name', help='What to call the file')
 manual.add_argument('num_questions', type=int, help='How many question columns to generate')
-manual.add_argument('num_participants', type=int, help='How many question columns to generate')
+manual.add_argument('num_participants', type=int, help='How many participant rows to generate')
 manual.add_argument('--range-high', dest='range_high', type=int, help='If there is a range for all questions, what is the top of that range for conditional formatting?')
 
 auto = subparsers.add_parser('auto')
-auto.add_argument('name', help='Input excel file that specifies what questionairres to create')
-auto.add_argument('num_participants', type=int, help='How many question columns to generate')
+auto.add_argument('input', help='Input excel file that specifies what questionairres to create')
+auto.add_argument('num_participants', type=int, help='How many participant rows to generate')
 auto.add_argument('output_path', help='Where to create the files')
 
 args = parser.parse_args()
+
+small_font = Font(size = "7")
 
 def do_borders(ws, x):
     for col in range(1, x):
@@ -37,16 +39,17 @@ def fill_sheet(ws, num_questions, num_participants, range_high, range_low=1, cop
     ws.column_dimensions["C"].width = "15"
     for col in range(4, 4 + num_questions):
         ws.cell(column=col, row=1, value="Q{0}".format(col-3))
-        ws.column_dimensions[get_column_letter(col)].width = "8"
+        ws.column_dimensions[get_column_letter(col)].width = "15"
+        question_metadata = ws.cell(column=col,row=2)
+        question_metadata.font = small_font
         if copyRow2FromSheet1:
-            question_metadata = ws.cell(column=col,row=2)
             question_metadata.value = '=Entry1!{0}'.format(question_metadata.coordinate)
 
     ws.cell(column=4 + num_questions, row=1, value="Notes")
 
     # Add subject numbers
     for row in range(3, 3 + num_participants):
-        ws.cell(column=1, row=row, value=(row-2))
+        ws.cell(column=1, row=row, value=(row-2+1000))
 
     # Freeze row 1-2, columns 1-3 - basically this freezes everything "above and to the left" of the given cell
     ws.freeze_panes = "D3"
@@ -70,6 +73,8 @@ def fill_sheet(ws, num_questions, num_participants, range_high, range_low=1, cop
     
 
 def compare_sheet(ws, num_questions, num_participants):
+    # Protect the sheet so nobody can edit it
+    ws.protection.sheet = True
     # Add headers
     ws['A1'] = 'Sub ID'
     ws['B1'] = 'Rater 1'
@@ -78,6 +83,7 @@ def compare_sheet(ws, num_questions, num_participants):
         ws.cell(column=col, row=1, value="Q{0}".format(col-3))
         question_metadata = ws.cell(column=col,row=2)
         question_metadata.value = '=Entry1!{0}'.format(question_metadata.coordinate)
+        question_metadata.font = small_font
 
     for row in range(3, 3 + num_participants):
         subject = ws.cell(column=1,row=row)
@@ -92,11 +98,22 @@ def compare_sheet(ws, num_questions, num_participants):
 
     last_cell = ws.cell(column=3 + num_questions, row=2 + num_participants)
 
+    for col in range(4, 4 + num_questions):
+        ws.column_dimensions[get_column_letter(col)].width = "15"
+
     # Conditional formatting to highlight mismatches
     redFill = PatternFill(start_color='EE6666', end_color='EE6666', fill_type='solid')
     dxf = DifferentialStyle(fill=redFill)
     rule = Rule(type="containsText", operator="containsText", text="vs.", dxf=dxf)
     ws.conditional_formatting.add('D3:{0}'.format(last_cell.coordinate), rule)
+
+
+def compare_sheet_vertical(ws, num_questions, num_participants):
+    # Add headers
+    ws['A1'] = 'Sub ID'
+    ws['B1'] = 'Question'
+    ws['C1'] = 'Rater'
+    ws['D1'] = 'Value'
 
 
 def generate_workbook(name, num_questions, num_participants, range_high, range_low=1):
@@ -106,6 +123,7 @@ def generate_workbook(name, num_questions, num_participants, range_high, range_l
     fill_sheet(wb.create_sheet("Entry1"), num_questions, num_participants, range_high, range_low)
     fill_sheet(wb.create_sheet("Entry2"), num_questions, num_participants, range_high, range_low, copyRow2FromSheet1=True)
     compare_sheet(wb.create_sheet("Final_Comparison"), num_questions, num_participants)
+    #compare_sheet_vertical(wb.create_sheet("Vertical_Comparison"), num_questions, num_participants)
 
     if not ".xlsx" in name:
         name = name + ".xlsx"
@@ -120,7 +138,7 @@ def generate_automatic():
     num_participants = args.num_participants
 
     # load file
-    workbook = xlrd.open_workbook(args.name)
+    workbook = xlrd.open_workbook(args.input)
     sheet = workbook.sheet_by_index(0)
 
     for row in range(1,sheet.nrows):
