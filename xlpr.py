@@ -23,14 +23,18 @@ auto.add_argument('output_path', help='Where to create the files')
 
 args = parser.parse_args()
 
-small_font = Font(size = "7")
+small_font = Font(size = "8")
+border_right = Border(right=Side(style='double', color='0000ff'))
+border_bottom = Border(bottom=Side(style='double', color='0000ff'))
 
 
-def do_borders(ws, x):
-    for col in range(1, x):
-        ws.cell(column=col, row=1).border = Border(bottom=Side(border_style="thin", color="000000"))
+def do_borders(ws, cols, rows):
+    for col in range(6, cols):
+        ws.cell(column=col, row=3).border = border_bottom
+    for row in range(4, rows):
+        ws.cell(column=5, row=row).border = border_right
 
-def fill_sheet(ws, num_questions, num_participants, range_high, range_low=1, copyRow2FromSheet1=False):
+def fill_sheet(ws, num_questions, num_participants, range_high, range_low=1, copyRowsFromSheet1=False):
     # Add headers
     ws['A1'] = 'Sub ID'
     ws['B1'] = 'Session Date'
@@ -40,36 +44,41 @@ def fill_sheet(ws, num_questions, num_participants, range_high, range_low=1, cop
     for col in range(1, 6 + num_questions):
         ws.column_dimensions[get_column_letter(col)].width = "15"
     for col in range(6, 6 + num_questions):
-        ws.cell(column=col, row=1, value="Q{0}".format(col-5))
-        question_metadata = ws.cell(column=col,row=2)
-        question_metadata.font = small_font
-        if copyRow2FromSheet1:
-            question_metadata.value = '=Entry1!{0}{1}'.format(get_column_letter(col), 2)
+        question_metadata1 = ws.cell(column=col,row=2)
+        question_metadata1.font = small_font
+        question_metadata2 = ws.cell(column=col,row=3)
+        question_metadata2.font = small_font
+        if copyRowsFromSheet1:
+            ws.cell(column=col, row=1, value='=Entry1!{0}{1}'.format(get_column_letter(col), 1))
+            question_metadata1.value='=Entry1!{0}{1}'.format(get_column_letter(col), 2)
+            question_metadata2.value='=Entry1!{0}{1}'.format(get_column_letter(col), 3)
+        else:
+            ws.cell(column=col, row=1, value="Q{0}".format(col-5))
 
     ws.cell(column=6 + num_questions, row=1, value="Notes")
 
     # Add subject numbers
-    for row in range(3, 3 + num_participants):
-        ws.cell(column=1, row=row, value=(row-2+1000))
+    for row in range(4, 4 + num_participants):
+        ws.cell(column=1, row=row, value=(row-3+1000))
 
-    # Freeze row 1-2, columns 1-3 - basically this freezes everything "above and to the left" of the given cell
-    ws.freeze_panes = "F3"
+    # This freezes everything "above and to the left" of the given cell
+    ws.freeze_panes = "F4"
 
-    do_borders(ws, 6 + num_questions)
+    do_borders(ws, 6 + num_questions, 4 + num_participants)
     
     last_cell = ws.cell(column=5 + num_questions, row=2 + num_participants)
 
     # Conditional formatting to do blanks as light gray
     blankFill = PatternFill(start_color='EEEEEE', end_color='EEEEEE', fill_type='solid')
     dxf = DifferentialStyle(fill=blankFill)
-    blank = Rule(type="expression", formula = ["ISBLANK(F3)"], dxf=dxf, stopIfTrue=True)
-    ws.conditional_formatting.add('F3:{0}'.format(last_cell.coordinate), blank)
+    blank = Rule(type="expression", formula = ["ISBLANK(F4)"], dxf=dxf, stopIfTrue=True)
+    ws.conditional_formatting.add('F4:{0}'.format(last_cell.coordinate), blank)
                               
     # Conditional formatting to highlight numbers out of range
     if range_high:
         yellowFill = PatternFill(start_color='EEEE66', end_color='EEEE66', fill_type='solid')
         rule = CellIsRule(operator="notBetween", formula=[str(range_low),str(range_high)], fill=yellowFill)
-        ws.conditional_formatting.add('F3:{0}'.format(last_cell.coordinate), rule)
+        ws.conditional_formatting.add('F4:{0}'.format(last_cell.coordinate), rule)
 
     
 
@@ -86,14 +95,17 @@ def compare_sheet(ws, num_questions, num_participants):
         ws.column_dimensions[get_column_letter(col)].width = "15"
     for col in range(6, 6 + num_questions):
         ws.cell(column=col, row=1, value="Q{0}".format(col-5))
-        question_metadata = ws.cell(column=col,row=2)
-        question_metadata.value = '=Entry1!{0}{1}'.format(get_column_letter(col), 2)
-        question_metadata.font = small_font
+        question_metadata1 = ws.cell(column=col,row=2)
+        question_metadata1.value = '=Entry1!{0}{1}'.format(get_column_letter(col), 2)
+        question_metadata1.font = small_font
+        question_metadata2 = ws.cell(column=col,row=3)
+        question_metadata2.value = '=Entry1!{0}{1}'.format(get_column_letter(col), 3)
+        question_metadata2.font = small_font
 
     def compare_cell(cell):
         cell.value = "=IF(Entry1!{0}=Entry2!{0},Entry2!{0},CONCATENATE(Entry1!{0},\" vs. \",Entry2!{0}))".format(cell.coordinate)
 
-    for row in range(3, 3 + num_participants):
+    for row in range(4, 4 + num_participants):
         subject = ws.cell(column=1,row=row)
         compare_cell(subject)
         session_date = ws.cell(column=2,row=row)
@@ -108,7 +120,7 @@ def compare_sheet(ws, num_questions, num_participants):
             cell = ws.cell(column=col,row=row)
             compare_cell(cell)
 
-    last_cell = ws.cell(column=3 + num_questions, row=2 + num_participants)
+    last_cell = ws.cell(column=3 + num_questions, row=3 + num_participants)
 
     for col in range(4, 6 + num_questions):
         ws.column_dimensions[get_column_letter(col)].width = "15"
@@ -133,7 +145,7 @@ def generate_workbook(name, num_questions, num_participants, range_high, range_l
 
     wb.remove(wb.active)
     fill_sheet(wb.create_sheet("Entry1"), num_questions, num_participants, range_high, range_low)
-    fill_sheet(wb.create_sheet("Entry2"), num_questions, num_participants, range_high, range_low, copyRow2FromSheet1=True)
+    fill_sheet(wb.create_sheet("Entry2"), num_questions, num_participants, range_high, range_low, copyRowsFromSheet1=True)
     compare_sheet(wb.create_sheet("Final_Comparison"), num_questions, num_participants)
     #compare_sheet_vertical(wb.create_sheet("Vertical_Comparison"), num_questions, num_participants)
 
@@ -154,7 +166,7 @@ def generate_automatic():
     sheet = workbook.sheet_by_index(0)
 
     for row in range(1,sheet.nrows):
-        num_questions = sheet.cell_value(row,1)
+        num_questions = sheet.cell_value(row,4)
         if num_questions == '': continue
         try:
             num_questions = int(num_questions)
@@ -162,13 +174,18 @@ def generate_automatic():
             print(f'Ignoring row {row}, "{num_questions}" is not a question number I understand')
             continue
         if num_questions > 0:
-            name = sheet.cell_value(row,0)
-            consistent_scale = sheet.cell_value(row,2)
+            name = sheet.cell_value(row,1)
+            consistent_scale = sheet.cell_value(row,5)
             if consistent_scale == 'y':
-                low = sheet.cell_value(row,3)
-                high = sheet.cell_value(row,4)
+                low = sheet.cell_value(row,6)
+                high = sheet.cell_value(row,7)
             else:
                 low = None
+                high = None
+
+            if low == "":
+                low = None
+            if high == "":
                 high = None
 
             generate_workbook(os.path.join(args.output_path, name), num_questions, num_participants, high, low)
