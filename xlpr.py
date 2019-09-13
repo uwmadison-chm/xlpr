@@ -2,6 +2,7 @@ import argparse
 import xlrd
 import os
 from openpyxl import Workbook
+from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Border, Side, Alignment, PatternFill, Font
 from openpyxl.styles.differential import DifferentialStyle
@@ -21,9 +22,13 @@ auto.add_argument('input', help='Input excel file that specifies what questionai
 auto.add_argument('num_participants', type=int, help='How many participant rows to generate')
 auto.add_argument('output_path', help='Where to create the files')
 
+addcols = subparsers.add_parser('addcols')
+addcols.add_argument('input', help='Questionairre file to alter')
+addcols.add_argument('num_columns', type=int, help='How many columns to add')
+
 args = parser.parse_args()
 
-small_font = Font(size = "8")
+small_font = Font(size = "9")
 border_right = Border(right=Side(style='double', color='0000ff'))
 border_bottom = Border(bottom=Side(style='double', color='0000ff'))
 
@@ -33,6 +38,20 @@ def do_borders(ws, cols, rows):
         ws.cell(column=col, row=3).border = border_bottom
     for row in range(4, rows):
         ws.cell(column=5, row=row).border = border_right
+
+def cf_mismatches(ws, first_cell, last_cell):
+    # Conditional formatting to highlight mismatches, where is a range like A3:C7
+    redFill = PatternFill(start_color='EE6666', end_color='EE6666', fill_type='solid')
+    dxf = DifferentialStyle(fill=redFill)
+    rule = Rule(type="containsText", operator="containsText", text=" vs. ", dxf=dxf)
+    ws.conditional_formatting.add('{0}:{1}'.format(first_cell, last_cell), rule)
+
+def cf_blanks(ws, first_cell, last_cell):
+    # Conditional formatting to highlight blanks as light gray
+    blankFill = PatternFill(start_color='EEEEEE', end_color='EEEEEE', fill_type='solid')
+    dxf = DifferentialStyle(fill=blankFill)
+    blank = Rule(type="expression", formula = ["ISBLANK({0})".format(first_cell)], dxf=dxf, stopIfTrue=True)
+    ws.conditional_formatting.add('{0}:{1}'.format(first_cell, last_cell), blank)
 
 def fill_sheet(ws, num_questions, num_participants, range_high, range_low=1, copyRowsFromSheet1=False):
     # Add headers
@@ -66,13 +85,11 @@ def fill_sheet(ws, num_questions, num_participants, range_high, range_low=1, cop
 
     do_borders(ws, 6 + num_questions, 4 + num_participants)
     
+    first_cell = ws.cell(column=6, row=3)
     last_cell = ws.cell(column=5 + num_questions, row=2 + num_participants)
 
     # Conditional formatting to do blanks as light gray
-    blankFill = PatternFill(start_color='EEEEEE', end_color='EEEEEE', fill_type='solid')
-    dxf = DifferentialStyle(fill=blankFill)
-    blank = Rule(type="expression", formula = ["ISBLANK(F4)"], dxf=dxf, stopIfTrue=True)
-    ws.conditional_formatting.add('F4:{0}'.format(last_cell.coordinate), blank)
+    cf_blanks(ws, 'F4', last_cell.coordinate)
                               
     # Conditional formatting to highlight numbers out of range
     if range_high:
@@ -80,7 +97,9 @@ def fill_sheet(ws, num_questions, num_participants, range_high, range_low=1, cop
         rule = CellIsRule(operator="notBetween", formula=[str(range_low),str(range_high)], fill=yellowFill)
         ws.conditional_formatting.add('F4:{0}'.format(last_cell.coordinate), rule)
 
-    
+def compare_cell(cell):
+    cell.value = "=IF(Entry1!{0}=Entry2!{0},Entry2!{0},CONCATENATE(Entry1!{0},\" vs. \",Entry2!{0}))".format(cell.coordinate)
+
 
 def compare_sheet(ws, num_questions, num_participants):
     # Protect the sheet so nobody can edit it
@@ -102,9 +121,6 @@ def compare_sheet(ws, num_questions, num_participants):
         question_metadata2.value = '=Entry1!{0}{1}'.format(get_column_letter(col), 3)
         question_metadata2.font = small_font
 
-    def compare_cell(cell):
-        cell.value = "=IF(Entry1!{0}=Entry2!{0},Entry2!{0},CONCATENATE(Entry1!{0},\" vs. \",Entry2!{0}))".format(cell.coordinate)
-
     for row in range(4, 4 + num_participants):
         subject = ws.cell(column=1,row=row)
         compare_cell(subject)
@@ -125,11 +141,7 @@ def compare_sheet(ws, num_questions, num_participants):
     for col in range(4, 6 + num_questions):
         ws.column_dimensions[get_column_letter(col)].width = "15"
 
-    # Conditional formatting to highlight mismatches
-    redFill = PatternFill(start_color='EE6666', end_color='EE6666', fill_type='solid')
-    dxf = DifferentialStyle(fill=redFill)
-    rule = Rule(type="containsText", operator="containsText", text=" vs. ", dxf=dxf)
-    ws.conditional_formatting.add('A3:{0}'.format(last_cell.coordinate), rule)
+    cf_mismatches(ws, 'A3', last_cell.coordinate)
 
 
 def compare_sheet_vertical(ws, num_questions, num_participants):
@@ -191,7 +203,67 @@ def generate_automatic():
             generate_workbook(os.path.join(args.output_path, name), num_questions, num_participants, high, low)
 
 
+def add_columns_to_existing_workbook():
+    wb = load_workbook(args.input)
+    sheet1 = wb.worksheets[0]
+    sheet2 = wb.worksheets[1]
+    sheet3 = wb.worksheets[2]
+
+    col_extent = sheet1.max_column
+    row_extent = sheet1.max_row
+
+    sheet1.insert_cols(col_extent, args.num_columns)
+    sheet2.insert_cols(col_extent, args.num_columns)
+    sheet3.insert_cols(col_extent, args.num_columns)
+
+    for col in range(col_extent, col_extent + args.num_columns):
+        sheet1.cell(column=col, row=1, value="Q{0}".format(col-5))
+        question_metadata1 = sheet1.cell(column=col,row=2)
+        question_metadata1.font = small_font
+        question_metadata2 = sheet1.cell(column=col,row=3)
+        question_metadata2.font = small_font
+
+    first_cell = sheet1.cell(column=col_extent, row=4)
+    last_cell = sheet1.cell(column=col_extent + args.num_columns, row=row_extent)
+    cf_blanks(sheet1, first_cell.coordinate, last_cell.coordinate)
+
+    def copy_sheet(sheet, compare):
+        if compare:
+            cf_mismatches(sheet, first_cell.coordinate, last_cell.coordinate)
+        else:
+            cf_blanks(sheet, first_cell.coordinate, last_cell.coordinate)
+        # Conditional formatting
+        for row in range(1, row_extent):
+            for col in range(col_extent, col_extent + args.num_columns):
+                cell = sheet.cell(column=col,row=row)
+                if row <= 3:
+                    cell.value='=Entry1!{0}{1}'.format(get_column_letter(col), row)
+                if row == 2 or row == 3:
+                    cell.font = small_font
+                elif row > 3 and compare:
+                    compare_cell(cell)
+
+    copy_sheet(sheet2, False)
+    copy_sheet(sheet3, True)
+
+    def widen_sheet(sheet):
+        for col in range(col_extent, col_extent + args.num_columns):
+            sheet.column_dimensions[get_column_letter(col)].width = "15"
+
+    widen_sheet(sheet1)
+    widen_sheet(sheet2)
+    widen_sheet(sheet3)
+
+    do_borders(sheet1, col_extent + args.num_columns, row_extent)
+    do_borders(sheet2, col_extent + args.num_columns, row_extent)
+    do_borders(sheet3, col_extent + args.num_columns, row_extent)
+
+    wb.save(args.input)
+
+
 if args.subcommand == 'auto':
     generate_automatic()
+elif args.subcommand == 'addcols':
+    add_columns_to_existing_workbook()
 else:
     generate_manual()
