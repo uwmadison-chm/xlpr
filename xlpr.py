@@ -43,7 +43,7 @@ def cf_mismatches(ws, first_cell, last_cell):
     # Conditional formatting to highlight mismatches, where is a range like A3:C7
     redFill = PatternFill(start_color='EE6666', end_color='EE6666', fill_type='solid')
     dxf = DifferentialStyle(fill=redFill)
-    rule = Rule(type="containsText", operator="containsText", text=" vs. ", dxf=dxf)
+    rule = Rule(type="containsText", operator="containsText", text="vs.", dxf=dxf)
     ws.conditional_formatting.add('{0}:{1}'.format(first_cell, last_cell), rule)
 
 def cf_blanks(ws, first_cell, last_cell):
