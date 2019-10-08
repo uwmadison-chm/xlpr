@@ -32,10 +32,21 @@ and could certainly be improved.
 
 This will add 17 fresh question columns to an existing spreadsheet, in place.
 
+But it has some bugs.
+
+### rebuild final comparison sheet
+
+    python3 xlpr.py rebuild file.xlsx
+
+This will rebuil the comparison sheet of an existing spreadsheet, in place.
+
+
 ## TODO
 
 - Better automatic support with more options
 - Conditional formatting "yellow out of range" support for addcols
+- Support for . in out of range formatting
+- "Test" square for conditional formatting on the third sheet
 - Support for alphabetical ranges (A-D) instead of 1-N, and support 
   conditional formatting for them still
 - Sheet to help with visual vertical comparison of text dual entry

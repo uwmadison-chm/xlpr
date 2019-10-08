@@ -26,6 +26,9 @@ addcols = subparsers.add_parser('addcols')
 addcols.add_argument('input', help='Questionairre file to alter')
 addcols.add_argument('num_columns', type=int, help='How many columns to add')
 
+rebuild = subparsers.add_parser('rebuild')
+rebuild.add_argument('input', help='Questionairre file to alter')
+
 args = parser.parse_args()
 
 small_font = Font(size = "9")
@@ -43,7 +46,7 @@ def cf_mismatches(ws, first_cell, last_cell):
     # Conditional formatting to highlight mismatches, where is a range like A3:C7
     redFill = PatternFill(start_color='EE6666', end_color='EE6666', fill_type='solid')
     dxf = DifferentialStyle(fill=redFill)
-    rule = Rule(type="containsText", operator="containsText", text="vs.", dxf=dxf)
+    rule = Rule(type="containsText", operator="containsText", text="|", dxf=dxf)
     ws.conditional_formatting.add('{0}:{1}'.format(first_cell, last_cell), rule)
 
 def cf_blanks(ws, first_cell, last_cell):
@@ -98,7 +101,7 @@ def fill_sheet(ws, num_questions, num_participants, range_high, range_low=1, cop
         ws.conditional_formatting.add('F4:{0}'.format(last_cell.coordinate), rule)
 
 def compare_cell(cell):
-    cell.value = "=IF(Entry1!{0}=Entry2!{0},Entry2!{0},CONCATENATE(Entry1!{0},\" vs. \",Entry2!{0}))".format(cell.coordinate)
+    cell.value = "=IF(Entry1!{0}=Entry2!{0},Entry2!{0},CONCATENATE(Entry1!{0},\" | \",Entry2!{0}))".format(cell.coordinate)
 
 
 def compare_sheet(ws, num_questions, num_participants):
@@ -110,6 +113,10 @@ def compare_sheet(ws, num_questions, num_participants):
     ws['C1'] = 'Visit'
     ws['D1'] = 'Rater 1'
     ws['E1'] = 'Rater 2'
+
+    # Cell for test comparison
+    ws['A3'] = 'Test|Comparison'
+
     for col in range(1, 6 + num_questions):
         ws.column_dimensions[get_column_letter(col)].width = "15"
     for col in range(6, 6 + num_questions):
@@ -261,9 +268,28 @@ def add_columns_to_existing_workbook():
     wb.save(args.input)
 
 
+def rebuild_existing_workbook():
+    wb = load_workbook(args.input)
+    sheet = wb.worksheets[2]
+
+    col_extent = sheet.max_column
+    row_extent = sheet.max_row
+
+    num_questions = col_extent - 4
+    num_participants = row_extent - 3
+
+    sheet.protection.sheet = False
+    wb.remove(sheet)
+    
+    compare_sheet(wb.create_sheet("Final_Comparison"), num_questions, num_participants)
+    wb.save(args.input)
+
+
 if args.subcommand == 'auto':
     generate_automatic()
 elif args.subcommand == 'addcols':
     add_columns_to_existing_workbook()
+elif args.subcommand == 'rebuild':
+    rebuild_existing_workbook()
 else:
     generate_manual()
