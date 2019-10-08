@@ -42,8 +42,15 @@ def do_borders(ws, cols, rows):
     for row in range(4, rows):
         ws.cell(column=5, row=row).border = border_right
 
+def cf_highlight_good_row(ws, first_cell, last_cell):
+    # Conditional formatting to highlight rows with no | in them
+    greenFill = PatternFill(start_color='66EE66', end_color='66EE66', fill_type='solid')
+    dxf = DifferentialStyle(fill=greenFill)
+    rule = Rule(type="expression", formula = ["ISBLANK({0})".format(first_cell)], dxf=dxf, stopIfTrue=True)
+    ws.conditional_formatting.add('{0}:{1}'.format(first_cell, last_cell), rule)
+
 def cf_mismatches(ws, first_cell, last_cell):
-    # Conditional formatting to highlight mismatches, where is a range like A3:C7
+    # Conditional formatting to highlight mismatches
     redFill = PatternFill(start_color='EE6666', end_color='EE6666', fill_type='solid')
     dxf = DifferentialStyle(fill=redFill)
     rule = Rule(type="containsText", operator="containsText", text="|", dxf=dxf)
@@ -101,7 +108,7 @@ def fill_sheet(ws, num_questions, num_participants, range_high, range_low=1, cop
         ws.conditional_formatting.add('F4:{0}'.format(last_cell.coordinate), rule)
 
 def compare_cell(cell):
-    cell.value = "=IF(Entry1!{0}=Entry2!{0},Entry2!{0},CONCATENATE(Entry1!{0},\" | \",Entry2!{0}))".format(cell.coordinate)
+    cell.value = "=IF(Entry1!{0}=Entry2!{0},IF(ISBLANK(Entry2!{0}),\"\",Entry2!{0}),CONCATENATE(Entry1!{0},\" | \",Entry2!{0}))".format(cell.coordinate)
 
 
 def compare_sheet(ws, num_questions, num_participants):
@@ -117,15 +124,19 @@ def compare_sheet(ws, num_questions, num_participants):
     # Cell for test comparison
     ws['A3'] = 'Test|Comparison'
 
+    formula = '=IF(ISBLANK(Entry1!{0}{1}),"",Entry1!{0}{1})'
+    formula2 = '=IF(ISBLANK(Entry2!{0}{1}),"",Entry2!{0}{1})'
+
     for col in range(1, 6 + num_questions):
         ws.column_dimensions[get_column_letter(col)].width = "15"
     for col in range(6, 6 + num_questions):
-        ws.cell(column=col, row=1, value="Q{0}".format(col-5))
+        letter = get_column_letter(col)
+        ws.cell(column=col, row=1, value=formula.format(letter, 1))
         question_metadata1 = ws.cell(column=col,row=2)
-        question_metadata1.value = '=Entry1!{0}{1}'.format(get_column_letter(col), 2)
+        question_metadata1.value = formula.format(letter, 2)
         question_metadata1.font = small_font
         question_metadata2 = ws.cell(column=col,row=3)
-        question_metadata2.value = '=Entry1!{0}{1}'.format(get_column_letter(col), 3)
+        question_metadata2.value = formula.format(letter, 3)
         question_metadata2.font = small_font
 
     for row in range(4, 4 + num_participants):
@@ -136,10 +147,10 @@ def compare_sheet(ws, num_questions, num_participants):
         visit = ws.cell(column=3,row=row)
         compare_cell(visit)
         rater1 = ws.cell(column=4,row=row)
-        rater1.value = "=Entry1!E{0}".format(row)
+        rater1.value = formula.format("E", row)
         rater2 = ws.cell(column=5,row=row)
-        rater2.value = "=Entry2!E{0}".format(row)
-        for col in range(4, 6 + num_questions):
+        rater2.value = formula2.format("E", row)
+        for col in range(6, 6 + num_questions):
             cell = ws.cell(column=col,row=row)
             compare_cell(cell)
 
@@ -148,7 +159,8 @@ def compare_sheet(ws, num_questions, num_participants):
     for col in range(4, 6 + num_questions):
         ws.column_dimensions[get_column_letter(col)].width = "15"
 
-    cf_mismatches(ws, 'A3', last_cell.coordinate)
+    cf_mismatches(ws, 'B3', last_cell.coordinate)
+    cf_highlight_good_row(ws, 'A3', ws.cell(column=1, row=3 + num_participants).coordinate)
 
 
 def compare_sheet_vertical(ws, num_questions, num_participants):
@@ -270,16 +282,20 @@ def add_columns_to_existing_workbook():
 
 def rebuild_existing_workbook():
     wb = load_workbook(args.input)
-    sheet = wb.worksheets[2]
+    first = wb.worksheets[0]
+    second = wb.worksheets[1]
+    compare = wb.worksheets[2]
 
-    col_extent = sheet.max_column
-    row_extent = sheet.max_row
+    col_extent = first.max_column
+    row_extent = first.max_row
 
-    num_questions = col_extent - 4
+    num_questions = col_extent - 5
     num_participants = row_extent - 3
 
-    sheet.protection.sheet = False
-    wb.remove(sheet)
+    compare.protection.sheet = False
+    wb.remove(compare)
+
+    # TODO: If entire row contains no |, subject id turns green
     
     compare_sheet(wb.create_sheet("Final_Comparison"), num_questions, num_participants)
     wb.save(args.input)
