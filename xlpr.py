@@ -107,8 +107,11 @@ def fill_sheet(ws, num_questions, num_participants, range_high, range_low=1, cop
         rule = CellIsRule(operator="notBetween", formula=[str(range_low),str(range_high)], fill=yellowFill)
         ws.conditional_formatting.add('F4:{0}'.format(last_cell.coordinate), rule)
 
-def compare_cell(cell):
-    cell.value = "=IF(Entry1!{0}=Entry2!{0},IF(ISBLANK(Entry2!{0}),\"\",Entry2!{0}),CONCATENATE(Entry1!{0},\" | \",Entry2!{0}))".format(cell.coordinate)
+def compare_cell(cell, is_date=False):
+    if is_date:
+        cell.value = "=IF(Entry1!{0}=Entry2!{0},IF(ISBLANK(Entry2!{0}),\"\",TEXT(Entry2!{0},\"mm/dd/yyyy\")),CONCATENATE(TEXT(Entry1!{0},\"mm/dd/yyyy\"),\" | \",TEXT(Entry2!{0},\"mm/dd/yyyy\")))".format(cell.coordinate)
+    else:
+        cell.value = "=IF(Entry1!{0}=Entry2!{0},IF(ISBLANK(Entry2!{0}),\"\",Entry2!{0}),CONCATENATE(Entry1!{0},\" | \",Entry2!{0}))".format(cell.coordinate)
 
 
 def compare_sheet(ws, num_questions, num_participants):
@@ -122,7 +125,7 @@ def compare_sheet(ws, num_questions, num_participants):
     ws['E1'] = 'Rater 2'
 
     # Cell for test comparison
-    ws['A3'] = 'Test|Comparison'
+    ws['B3'] = 'Test|Comparison'
 
     formula = '=IF(ISBLANK(Entry1!{0}{1}),"",Entry1!{0}{1})'
     formula2 = '=IF(ISBLANK(Entry2!{0}{1}),"",Entry2!{0}{1})'
@@ -143,7 +146,7 @@ def compare_sheet(ws, num_questions, num_participants):
         subject = ws.cell(column=1,row=row)
         compare_cell(subject)
         session_date = ws.cell(column=2,row=row)
-        compare_cell(session_date)
+        compare_cell(session_date, is_date=True)
         visit = ws.cell(column=3,row=row)
         compare_cell(visit)
         rater1 = ws.cell(column=4,row=row)
@@ -160,7 +163,9 @@ def compare_sheet(ws, num_questions, num_participants):
         ws.column_dimensions[get_column_letter(col)].width = "15"
 
     cf_mismatches(ws, 'B3', last_cell.coordinate)
-    cf_highlight_good_row(ws, 'A3', ws.cell(column=1, row=3 + num_participants).coordinate)
+    # Good row stuff not working right yet.
+
+    #cf_highlight_good_row(ws, 'A3', ws.cell(column=1, row=3 + num_participants).coordinate)
 
 
 def compare_sheet_vertical(ws, num_questions, num_participants):
