@@ -29,6 +29,9 @@ addcols.add_argument('num_columns', type=int, help='How many columns to add')
 rebuild = subparsers.add_parser('rebuild')
 rebuild.add_argument('input', help='Questionairre file to alter')
 
+check = subparsers.add_parser('check')
+check.add_argument('input', help='Questionairre file to check')
+
 args = parser.parse_args()
 
 small_font = Font(size = "9")
@@ -43,10 +46,10 @@ def do_borders(ws, cols, rows):
         ws.cell(column=5, row=row).border = border_right
 
 def cf_highlight_good_row(ws, first_cell, last_cell):
-    # Conditional formatting to highlight rows with no | in them
+    # Conditional formatting to highlight rows with no mismatches
     greenFill = PatternFill(start_color='66EE66', end_color='66EE66', fill_type='solid')
     dxf = DifferentialStyle(fill=greenFill)
-    rule = Rule(type="expression", formula = ["ISBLANK({0})".format(first_cell)], dxf=dxf, stopIfTrue=True)
+    rule = Rule(type="expression", formula = ["=COUNT(SEARCH(\"|\",$F4:$Y4))<1".format(first_cell)], dxf=dxf, stopIfTrue=True)
     ws.conditional_formatting.add('{0}:{1}'.format(first_cell, last_cell), rule)
 
 def cf_mismatches(ws, first_cell, last_cell):
@@ -109,9 +112,9 @@ def fill_sheet(ws, num_questions, num_participants, range_high, range_low=1, cop
 
 def compare_cell(cell, is_date=False):
     if is_date:
-        cell.value = "=IF(Entry1!{0}=Entry2!{0},IF(ISBLANK(Entry2!{0}),\"\",TEXT(Entry2!{0},\"mm/dd/yyyy\")),CONCATENATE(TEXT(Entry1!{0},\"mm/dd/yyyy\"),\" | \",TEXT(Entry2!{0},\"mm/dd/yyyy\")))".format(cell.coordinate)
+        cell.value = "=IF(Entry1!{0}=Entry2!{0},IF(ISBLANK(Entry1!{0}),\"\",TEXT(Entry1!{0},\"mm/dd/yyyy\")),CONCATENATE(TEXT(Entry1!{0},\"mm/dd/yyyy\"),\" | \",TEXT(Entry2!{0},\"mm/dd/yyyy\")))".format(cell.coordinate)
     else:
-        cell.value = "=IF(Entry1!{0}=Entry2!{0},IF(ISBLANK(Entry2!{0}),\"\",Entry2!{0}),CONCATENATE(Entry1!{0},\" | \",Entry2!{0}))".format(cell.coordinate)
+        cell.value = "=IF(Entry1!{0}=Entry2!{0},IF(ISBLANK(Entry1!{0}),\"\",Entry1!{0}),CONCATENATE(Entry1!{0},\" | \",Entry2!{0}))".format(cell.coordinate)
 
 
 def compare_sheet(ws, num_questions, num_participants):
@@ -157,15 +160,13 @@ def compare_sheet(ws, num_questions, num_participants):
             cell = ws.cell(column=col,row=row)
             compare_cell(cell)
 
-    last_cell = ws.cell(column=3 + num_questions, row=3 + num_participants)
+    last_cell = ws.cell(column=4 + num_questions, row=3 + num_participants)
 
     for col in range(4, 6 + num_questions):
         ws.column_dimensions[get_column_letter(col)].width = "15"
 
     cf_mismatches(ws, 'B3', last_cell.coordinate)
-    # Good row stuff not working right yet.
-
-    #cf_highlight_good_row(ws, 'A3', ws.cell(column=1, row=3 + num_participants).coordinate)
+    cf_highlight_good_row(ws, 'A4', ws.cell(column=1, row=3 + num_participants).coordinate)
 
 
 def compare_sheet_vertical(ws, num_questions, num_participants):
@@ -300,10 +301,47 @@ def rebuild_existing_workbook():
     compare.protection.sheet = False
     wb.remove(compare)
 
-    # TODO: If entire row contains no |, subject id turns green
-    
     compare_sheet(wb.create_sheet("Final_Comparison"), num_questions, num_participants)
     wb.save(args.input)
+
+
+def check_workbook():
+    try:
+        wb = load_workbook(args.input)
+        first = wb.worksheets[0]
+        second = wb.worksheets[1]
+
+        columns1 = first.max_column
+        rows1 = first.max_row
+
+        columns2 = second.max_column
+        rows2 = second.max_row
+
+        if columns1 == columns2 and rows1 == rows2:
+            print(f"Found {columns1} columns and {rows1} rows in {args.input}")
+        else:
+            print(f"ERROR, {columns1} columns and {rows1} rows on first sheet and {columns2} columns and {rows2} rows on second sheet in {args.input}")
+
+        mismatches = []
+
+        def checker(col,row):
+            r = second.cell(column=col,row=row)
+            expected = '=Entry1!{0}{1}'.format(get_column_letter(col), row)
+            if r.value != expected:
+                mismatches.append(r.coordinate)
+
+        # Check if sheet two first three columns are correct
+        # Skip notes column
+        for col in range(6, columns2 - 1):
+            checker(col, 1)
+            checker(col, 2)
+            checker(col, 3)
+
+        if mismatches:
+            print(f"WARNING: Formula mismatches! {mismatches}")
+
+    except Exception as e:
+        print(f"Error in {args.input}: {e}")
 
 
 if args.subcommand == 'auto':
@@ -312,5 +350,7 @@ elif args.subcommand == 'addcols':
     add_columns_to_existing_workbook()
 elif args.subcommand == 'rebuild':
     rebuild_existing_workbook()
+elif args.subcommand == 'check':
+    check_workbook()
 else:
     generate_manual()
