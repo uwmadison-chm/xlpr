@@ -38,7 +38,15 @@ But it has some bugs.
 
     python3 xlpr.py rebuild file.xlsx
 
-This will rebuil the comparison sheet of an existing spreadsheet, in place.
+This will rebuild the comparison sheet of an existing spreadsheet, in place.
+
+### check various facts
+
+    python3 xlpr.py check file.xlsx
+
+This will compare the number of used rows/columns in sheets 1 and 2, and 
+confirm that their question headers are pulling from the right places.
+
 
 
 ## TODO
@@ -46,7 +54,6 @@ This will rebuil the comparison sheet of an existing spreadsheet, in place.
 - Better automatic support with more options
 - Conditional formatting "yellow out of range" support for addcols
 - Support for . in out of range formatting
-- "Test" square for conditional formatting on the third sheet
 - Support for alphabetical ranges (A-D) instead of 1-N, and support 
   conditional formatting for them still
 - Sheet to help with visual vertical comparison of text dual entry
