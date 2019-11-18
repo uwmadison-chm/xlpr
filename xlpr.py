@@ -1,6 +1,8 @@
 import argparse
 import xlrd
 import os
+from copy import copy
+
 from openpyxl import Workbook
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
@@ -45,18 +47,18 @@ def do_borders(ws, cols, rows):
     for row in range(4, rows):
         ws.cell(column=5, row=row).border = border_right
 
-def cf_highlight_good_row(ws, first_cell, last_cell):
+def cf_highlight_good_row(ws, first_cell, last_cell, start_row, end_row):
     # Conditional formatting to highlight rows with no mismatches
     greenFill = PatternFill(start_color='66EE66', end_color='66EE66', fill_type='solid')
     dxf = DifferentialStyle(fill=greenFill)
-    rule = Rule(type="expression", formula = ["=COUNT(SEARCH(\"|\",$F4:$Y4))<1".format(first_cell)], dxf=dxf, stopIfTrue=True)
+    rule = Rule(type="expression", formula = ["COUNT(SEARCH(\"|\",${0}:${1}))<1".format(start_row, end_row)], dxf=dxf, stopIfTrue=True)
     ws.conditional_formatting.add('{0}:{1}'.format(first_cell, last_cell), rule)
 
 def cf_mismatches(ws, first_cell, last_cell):
     # Conditional formatting to highlight mismatches
     redFill = PatternFill(start_color='EE6666', end_color='EE6666', fill_type='solid')
     dxf = DifferentialStyle(fill=redFill)
-    rule = Rule(type="containsText", operator="containsText", text="|", dxf=dxf)
+    rule = Rule(type="containsText", operator="containsText", text="|", dxf=dxf, stopIfTrue=True)
     ws.conditional_formatting.add('{0}:{1}'.format(first_cell, last_cell), rule)
 
 def cf_blanks(ws, first_cell, last_cell):
@@ -166,7 +168,10 @@ def compare_sheet(ws, num_questions, num_participants):
         ws.column_dimensions[get_column_letter(col)].width = "15"
 
     cf_mismatches(ws, 'B3', last_cell.coordinate)
-    cf_highlight_good_row(ws, 'A4', ws.cell(column=1, row=3 + num_participants).coordinate)
+    cf_highlight_good_row(ws, 'A4',
+            ws.cell(column=1, row=3 + num_participants).coordinate,
+            ws.cell(column=5, row=4).coordinate,
+            ws.cell(column=3 + num_questions, row=4).coordinate)
 
 
 def compare_sheet_vertical(ws, num_questions, num_participants):
@@ -286,6 +291,19 @@ def add_columns_to_existing_workbook():
     wb.save(args.input)
 
 
+def copy_headings(sheet1, sheet2):
+    col_extent = sheet1.max_column
+    row_extent = sheet1.max_row
+
+    for row in range(1, 4):
+        for col in range(1, col_extent):
+            source = sheet1.cell(column=col, row=row)
+            target = sheet2.cell(column=col, row=row)
+            target.value = source.value
+            if source.has_style:
+                target._style = copy(source._style)
+
+
 def rebuild_existing_workbook():
     wb = load_workbook(args.input)
     first = wb.worksheets[0]
@@ -301,6 +319,7 @@ def rebuild_existing_workbook():
     compare.protection.sheet = False
     wb.remove(compare)
 
+    copy_headings(first, second)
     compare_sheet(wb.create_sheet("Final_Comparison"), num_questions, num_participants)
     wb.save(args.input)
 
