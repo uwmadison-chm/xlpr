@@ -321,6 +321,7 @@ def rebuild_existing_workbook():
 
     copy_headings(first, second)
     compare_sheet(wb.create_sheet("Final_Comparison"), num_questions, num_participants)
+    copy_headings(first, wb.worksheets[2])
     wb.save(args.input)
 
 
