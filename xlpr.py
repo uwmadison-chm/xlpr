@@ -58,7 +58,7 @@ def cf_mismatches(ws, first_cell, last_cell):
     # Conditional formatting to highlight mismatches
     redFill = PatternFill(start_color='EE6666', end_color='EE6666', fill_type='solid')
     dxf = DifferentialStyle(fill=redFill)
-    rule = Rule(type="containsText", operator="containsText", text="|", dxf=dxf, stopIfTrue=True)
+    rule = Rule(type="expression", formula = ["ISNUMBER(SEARCH(\"|\", {0}))".format(first_cell)], dxf=dxf, stopIfTrue=True)
     ws.conditional_formatting.add('{0}:{1}'.format(first_cell, last_cell), rule)
 
 def cf_blanks(ws, first_cell, last_cell):
@@ -167,11 +167,11 @@ def compare_sheet(ws, num_questions, num_participants):
     for col in range(4, 6 + num_questions):
         ws.column_dimensions[get_column_letter(col)].width = "15"
 
-    cf_mismatches(ws, 'B3', last_cell.coordinate)
     cf_highlight_good_row(ws, 'A4',
             ws.cell(column=1, row=3 + num_participants).coordinate,
             ws.cell(column=5, row=4).coordinate,
             ws.cell(column=3 + num_questions, row=4).coordinate)
+    cf_mismatches(ws, 'B3', last_cell.coordinate)
 
 
 def compare_sheet_vertical(ws, num_questions, num_participants):
