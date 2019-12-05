@@ -313,13 +313,14 @@ def rebuild_existing_workbook():
     col_extent = first.max_column
     row_extent = first.max_row
 
-    num_questions = col_extent - 5
+    num_questions = col_extent - 4
     num_participants = row_extent - 3
 
     compare.protection.sheet = False
     wb.remove(compare)
 
     copy_headings(first, second)
+    print(f"Building comparison sheet with {num_questions} questions and {num_participants} participants")
     compare_sheet(wb.create_sheet("Final_Comparison"), num_questions, num_participants)
     copy_headings(first, wb.worksheets[2])
     wb.save(args.input)
