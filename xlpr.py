@@ -31,6 +31,9 @@ addcols.add_argument('num_columns', type=int, help='How many columns to add')
 rebuild = subparsers.add_parser('rebuild')
 rebuild.add_argument('input', help='Questionairre file to alter')
 
+rebuild = subparsers.add_parser('dr')
+rebuild.add_argument('input', help='Day reconstruction file to alter')
+
 check = subparsers.add_parser('check')
 check.add_argument('input', help='Questionairre file to check')
 
@@ -112,32 +115,40 @@ def fill_sheet(ws, num_questions, num_participants, range_high, range_low=1, cop
         rule = CellIsRule(operator="notBetween", formula=[str(range_low),str(range_high)], fill=yellowFill)
         ws.conditional_formatting.add('F4:{0}'.format(last_cell.coordinate), rule)
 
-def compare_cell(cell, is_date=False):
+def compare_cell(cell, is_date=False, name1='Entry1', name2='Entry2'):
     if is_date:
-        cell.value = "=IF(Entry1!{0}=Entry2!{0},IF(ISBLANK(Entry1!{0}),\"\",TEXT(Entry1!{0},\"mm/dd/yyyy\")),CONCATENATE(TEXT(Entry1!{0},\"mm/dd/yyyy\"),\" | \",TEXT(Entry2!{0},\"mm/dd/yyyy\")))".format(cell.coordinate)
+        cell.value = "=IF({1}!{0}={2}!{0},IF(ISBLANK({1}!{0}),\"\",TEXT({1}!{0},\"mm/dd/yyyy\")),CONCATENATE(TEXT({1}!{0},\"mm/dd/yyyy\"),\" | \",TEXT({2}!{0},\"mm/dd/yyyy\")))".format(cell.coordinate, name1, name2)
     else:
-        cell.value = "=IF(Entry1!{0}=Entry2!{0},IF(ISBLANK(Entry1!{0}),\"\",Entry1!{0}),CONCATENATE(Entry1!{0},\" | \",Entry2!{0}))".format(cell.coordinate)
+        cell.value = "=IF({1}!{0}={2}!{0},IF(ISBLANK({1}!{0}),\"\",{2}!{0}),CONCATENATE({1}!{0},\" | \",{2}!{0}))".format(cell.coordinate, name1, name2)
 
 
-def compare_sheet(ws, num_questions, num_participants):
+def compare_sheet(ws, num_questions, num_participants,
+        skip_columns=6, name1='Entry1', name2='Entry2',
+        is_day_reconstruction=False, header_sheet=None):
     # Protect the sheet so nobody can edit it
     ws.protection.sheet = True
     # Add headers
     ws['A1'] = 'Sub ID'
-    ws['B1'] = 'Session Date'
-    ws['C1'] = 'Visit'
-    ws['D1'] = 'Rater 1'
-    ws['E1'] = 'Rater 2'
+    if is_day_reconstruction:
+        ws['B1'] = 'Rater 1'
+        ws['C1'] = 'Rater 2'
+        ws['D1'] = 'Day'
+        # Cell for test comparison
+        ws['B2'] = 'Test|Comparison'
+    else:
+        ws['B1'] = 'Session Date'
+        ws['C1'] = 'Visit'
+        ws['D1'] = 'Rater 1'
+        ws['E1'] = 'Rater 2'
+        # Cell for test comparison
+        ws['B3'] = 'Test|Comparison'
 
-    # Cell for test comparison
-    ws['B3'] = 'Test|Comparison'
+    formula = '=IF(ISBLANK(' + name1 + '!{0}{1}),"",' + name1 + '!{0}{1})'
+    formula2 = '=IF(ISBLANK(' + name2 +  '!{0}{1}),"",' + name2 + '!{0}{1})'
 
-    formula = '=IF(ISBLANK(Entry1!{0}{1}),"",Entry1!{0}{1})'
-    formula2 = '=IF(ISBLANK(Entry2!{0}{1}),"",Entry2!{0}{1})'
-
-    for col in range(1, 6 + num_questions):
+    for col in range(1, skip_columns + num_questions):
         ws.column_dimensions[get_column_letter(col)].width = "15"
-    for col in range(6, 6 + num_questions):
+    for col in range(skip_columns, skip_columns + num_questions):
         letter = get_column_letter(col)
         ws.cell(column=col, row=1, value=formula.format(letter, 1))
         question_metadata1 = ws.cell(column=col,row=2)
@@ -147,39 +158,47 @@ def compare_sheet(ws, num_questions, num_participants):
         question_metadata2.value = formula.format(letter, 3)
         question_metadata2.font = small_font
 
+    # Look up if any of the headers should be dates, for formatting formulas
+    date_columns = []
+    if header_sheet:
+        for col in range(1, skip_columns + num_questions):
+            header = header_sheet.cell(column=col,row=2).value
+            if header:
+                if "date" in header: 
+                    date_columns.append(col)
+
     for row in range(4, 4 + num_participants):
         subject = ws.cell(column=1,row=row)
-        compare_cell(subject)
-        session_date = ws.cell(column=2,row=row)
-        compare_cell(session_date, is_date=True)
-        visit = ws.cell(column=3,row=row)
-        compare_cell(visit)
-        rater1 = ws.cell(column=4,row=row)
-        rater1.value = formula.format("E", row)
-        rater2 = ws.cell(column=5,row=row)
-        rater2.value = formula2.format("E", row)
-        for col in range(6, 6 + num_questions):
+        compare_cell(subject, name1=name1, name2=name2)
+        if is_day_reconstruction:
+            rater1 = ws.cell(column=2,row=row)
+            rater1.value = formula.format("C", row)
+            rater2 = ws.cell(column=3,row=row)
+            rater2.value = formula2.format("C", row)
+            day = ws.cell(column=4,row=row)
+            compare_cell(day, name1=name1, name2=name2)
+        else:
+            session_date = ws.cell(column=2,row=row)
+            compare_cell(session_date, is_date=True, name1=name1, name2=name2)
+            visit = ws.cell(column=3,row=row)
+            compare_cell(visit, name1=name1, name2=name2)
+            rater1 = ws.cell(column=4,row=row)
+            rater1.value = formula.format("E", row)
+            rater2 = ws.cell(column=5,row=row)
+            rater2.value = formula2.format("E", row)
+        for col in range(skip_columns, skip_columns + num_questions):
             cell = ws.cell(column=col,row=row)
-            compare_cell(cell)
+            is_date = col in date_columns
+            compare_cell(cell, is_date=is_date, name1=name1, name2=name2)
 
     last_cell = ws.cell(column=4 + num_questions, row=3 + num_participants)
-
-    for col in range(4, 6 + num_questions):
-        ws.column_dimensions[get_column_letter(col)].width = "15"
 
     cf_highlight_good_row(ws, 'A4',
             ws.cell(column=1, row=3 + num_participants).coordinate,
             ws.cell(column=5, row=4).coordinate,
             ws.cell(column=3 + num_questions, row=4).coordinate)
     cf_mismatches(ws, 'B3', last_cell.coordinate)
-
-
-def compare_sheet_vertical(ws, num_questions, num_participants):
-    # Add headers
-    ws['A1'] = 'Sub ID'
-    ws['B1'] = 'Question'
-    ws['C1'] = 'Rater'
-    ws['D1'] = 'Value'
+    return ws
 
 
 def generate_workbook(name, num_questions, num_participants, range_high, range_low=1):
@@ -291,12 +310,14 @@ def add_columns_to_existing_workbook():
     wb.save(args.input)
 
 
-def copy_headings(sheet1, sheet2):
+def copy_headings(sheet1, sheet2, start_row=4, start_col=5):
     col_extent = sheet1.max_column
     row_extent = sheet1.max_row
 
-    for row in range(1, 4):
-        for col in range(1, col_extent):
+    for row in range(1, start_row):
+        # sheet2.row_dimensions[1].height = sheet1.row_dimensions[1].height
+        sheet2.row_dimensions = sheet1.row_dimensions
+        for col in range(start_col, col_extent):
             source = sheet1.cell(column=col, row=row)
             target = sheet2.cell(column=col, row=row)
             target.value = source.value
@@ -365,6 +386,51 @@ def check_workbook():
         print(f"Error in {args.input}: {e}")
 
 
+def day_reconstructions():
+    wb = load_workbook(args.input)
+
+    first = wb.worksheets[wb.sheetnames.index("R1_day")]
+
+    col_extent = first.max_column
+    row_extent = first.max_row
+
+    num_questions = col_extent - 4
+    num_rows = row_extent + 500
+
+    compare = wb.worksheets[wb.sheetnames.index("Days_comparison")]
+    compare.protection.sheet = False
+    wb.remove(compare)
+
+    print(f"Building days comparison sheet with {num_questions} questions and {num_rows} rows")
+    ws = compare_sheet(
+            wb.create_sheet("Days_comparison", index=2),
+            num_questions, num_rows,
+            skip_columns=4, is_day_reconstruction=True,
+            header_sheet=first,
+            name1='R1_day', name2='R2_day'
+            )
+    copy_headings(first, ws, start_row=4, start_col=5)
+
+    # Now the episodes pair
+    compare = wb.worksheets[wb.sheetnames.index("Episodes_comparison")]
+    compare.protection.sheet = False
+    wb.remove(compare)
+
+    first_episodes = wb.worksheets[wb.sheetnames.index("R1_episodes")]
+
+    print(f"Building episodes comparison sheet with {num_questions} questions and {num_rows} rows")
+    ws = compare_sheet(
+            wb.create_sheet("Episodes_comparison", index=5),
+            num_questions, num_rows,
+            skip_columns=4, is_day_reconstruction=True,
+            header_sheet=first_episodes,
+            name1='R1_episodes', name2='R2_episodes'
+            )
+
+    copy_headings(first_episodes, ws, start_row=4, start_col=5)
+    wb.save(args.input)
+
+
 if args.subcommand == 'auto':
     generate_automatic()
 elif args.subcommand == 'addcols':
@@ -373,5 +439,7 @@ elif args.subcommand == 'rebuild':
     rebuild_existing_workbook()
 elif args.subcommand == 'check':
     check_workbook()
+elif args.subcommand == 'dr':
+    day_reconstructions()
 else:
     generate_manual()

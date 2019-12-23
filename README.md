@@ -40,6 +40,10 @@ But it has some bugs.
 
 This will rebuild the comparison sheet of an existing spreadsheet, in place.
 
+To do it in a `bash` loop,
+
+    for f in location/*.xlsx; do echo $f; python3 xlpr.py rebuild $f; done
+
 ### check various facts
 
     python3 xlpr.py check file.xlsx
@@ -47,7 +51,12 @@ This will rebuild the comparison sheet of an existing spreadsheet, in place.
 This will compare the number of used rows/columns in sheets 1 and 2, and 
 confirm that their question headers are pulling from the right places.
 
+### build comparison sheets for day reconstructions
 
+    python3 xlpr.py dr file.xlsx
+
+Day reconstruction comparison sheets are slightly different, having 2 
+additional sheets of "episodes"
 
 ## TODO
 
